@@ -1,4 +1,6 @@
 streamlit
 pandas
-pandas_ta
+numpy<2.0
 yfinance
+pandas-ta
+requests
