@@ -1,4 +1,3 @@
-import time
 import pandas as pd
 import streamlit as st
 import yfinance as yf
@@ -37,7 +36,7 @@ def send_telegram_alert(message):
       pass
 
 
-# --- SIDEBAR KONTROL & AUTO-REFRESH ---
+# --- SIDEBAR KONTROL & AUTO-REFRESH PINTAR ---
 st.sidebar.header("Pengaturan Sinyal")
 timeframe_input = st.sidebar.selectbox(
     "Timeframe Eksekusi", ["1m", "5m", "15m", "1h"], index=2
@@ -46,12 +45,14 @@ lot_size = st.sidebar.number_input(
     "Ukuran Lot", value=0.01, step=0.01, format="%.2f"
 )
 
-# Fitur Auto-Refresh agar halaman memperbarui data secara berkala
 auto_refresh = st.sidebar.checkbox("Aktifkan Auto-Refresh (Setiap 2 Menit)")
+
+# Jika dicentang, gunakan meta refresh HTML (tidak bikin layar samar/freeze)
 if auto_refresh:
-  # Menggunakan st.rerun dengan jeda waktu aman
-  time.sleep(120)
-  st.rerun()
+  st.markdown(
+      '<meta http-equiv="refresh" content="120">', unsafe_allow_html=True
+  )
+  st.sidebar.caption("🔄 Auto-refresh aktif (120 detik).")
 
 if st.sidebar.button("Perbarui Analisis Pasar Sekarang", type="primary"):
   st.rerun()
@@ -60,7 +61,6 @@ if st.sidebar.button("Perbarui Analisis Pasar Sekarang", type="primary"):
 # Fungsi Ambil Data Presisi Tinggi
 @st.cache_data(ttl=30)
 def fetch_cloud_data(symbol="GC=F", interval="15m", period="2d"):
-  # Menggunakan period '2d' atau '5d' dengan interval terpilih untuk sinkronisasi optimal
   data = yf.download(symbol, period=period, interval=interval, progress=False)
   if data.empty:
     return None
@@ -71,12 +71,11 @@ def fetch_cloud_data(symbol="GC=F", interval="15m", period="2d"):
 
 
 with st.spinner("Menarik data pasar emas global terbaru..."):
-  # Menyesuaikan periode agar data lebih segar dan selaras antara lokal & cloud
   df_exec = fetch_cloud_data("GC=F", interval=timeframe_input, period="2d")
   df_macro = fetch_cloud_data("GC=F", interval="1h", period="5d")
 
   if df_exec is not None and df_macro is not None:
-    # Perhitungan Indikator Teknikal Manual (Anti-Conflict)
+    # Perhitungan Indikator Teknikal Manual
     df_exec["EMA_50"] = df_exec["Close"].ewm(span=50, adjust=False).mean()
     df_exec["EMA_200"] = df_exec["Close"].ewm(span=200, adjust=False).mean()
 
