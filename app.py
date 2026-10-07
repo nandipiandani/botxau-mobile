@@ -1,6 +1,4 @@
 import pandas as pd
-import pandas_ta as ta
-import requests
 import streamlit as st
 import yfinance as yf
 
@@ -16,7 +14,6 @@ st.markdown(
 )
 
 # --- KONFIGURASI NOTIFIKASI TELEGRAM (OPSIONAL) ---
-# Biar bisa kirim notifikasi ke HP, masukkan Bot Token dan Chat ID Telegram kamu di sini
 TELEGRAM_BOT_TOKEN = st.sidebar.text_input(
     "Telegram Bot Token (Opsional)", type="password"
 )
@@ -25,6 +22,8 @@ TELEGRAM_CHAT_ID = st.sidebar.text_input("Telegram Chat ID (Opsional)")
 
 def send_telegram_alert(message):
   if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+    import requests
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -69,14 +68,26 @@ with st.spinner("Menganalisis pasar emas global..."):
   df_macro = fetch_cloud_data("GC=F", interval="1h", period="7d")
 
   if df_exec is not None and df_macro is not None:
-    df_exec["EMA_50"] = ta.ema(df_exec["Close"], length=50)
-    df_exec["EMA_200"] = ta.ema(df_exec["Close"], length=200)
-    df_exec["RSI"] = ta.rsi(df_exec["Close"], length=14)
-    df_exec["ATR"] = ta.atr(
-        df_exec["High"], df_exec["Low"], df_exec["Close"], length=14
-    )
+    # Hitung Indikator Manual (Aman dari error pandas-ta)
+    df_exec["EMA_50"] = df_exec["Close"].ewm(span=50, adjust=False).mean()
+    df_exec["EMA_200"] = df_exec["Close"].ewm(span=200, adjust=False).mean()
 
-    df_macro["EMA_200"] = ta.ema(df_macro["Close"], length=200)
+    # Hitung RSI 14 manual
+    delta = df_exec["Close"].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df_exec["RSI"] = 100 - (100 / (1 + rs))
+
+    # Hitung ATR 14 manual
+    high_low = df_exec["High"] - df_exec["Low"]
+    high_close = (df_exec["High"] - df_exec["Close"].shift()).abs()
+    low_close = (df_exec["Low"] - df_exec["Close"].shift()).abs()
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df_exec["ATR"] = tr.rolling(window=14).mean()
+
+    # Hitung Tren Makro (1H)
+    df_macro["EMA_200"] = df_macro["Close"].ewm(span=200, adjust=False).mean()
 
     df_exec = df_exec.dropna()
     df_macro = df_macro.dropna()
@@ -114,7 +125,7 @@ with st.spinner("Menganalisis pasar emas global..."):
           last_macro["EMA_200"]
       )
 
-      # Logika Sinyal Buy / Sell dengan Detail Harga Lengkap
+      # Logika Sinyal Buy / Sell
       if is_macro_bullish and rsi_val < 40:
         sl_price = current_price - (1.5 * atr_val)
         tp_price = current_price + (2.5 * atr_val)
@@ -127,7 +138,6 @@ with st.spinner("Menganalisis pasar emas global..."):
                 * **Take Profit (TP):** **${tp_price:,.2f}** (Target profit)
                 """)
 
-        # Kirim Notifikasi Telegram otomatis (jika token diisi)
         alert_msg = (
             f"🟢 *XAUUSDm BUY SIGNAL*\n- Entry: ${current_price:,.2f}\n- SL:"
             f" ${sl_price:,.2f}\n- TP: ${tp_price:,.2f}"
@@ -146,7 +156,6 @@ with st.spinner("Menganalisis pasar emas global..."):
                 * **Take Profit (TP):** **${tp_price:,.2f}** (Target profit)
                 """)
 
-        # Kirim Notifikasi Telegram otomatis (jika token diisi)
         alert_msg = (
             f"🔴 *XAUUSDm SELL SIGNAL*\n- Entry: ${current_price:,.2f}\n- SL:"
             f" ${sl_price:,.2f}\n- TP: ${tp_price:,.2f}"
