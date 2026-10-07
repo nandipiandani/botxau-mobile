@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 
 # Konfigurasi Tampilan Web Dashboard
@@ -36,7 +37,7 @@ def send_telegram_alert(message):
       pass
 
 
-# --- SIDEBAR KONTROL & AUTO-REFRESH PINTAR ---
+# --- SIDEBAR KONTROL & COUNTDOWN TIMER AUTO-REFRESH ---
 st.sidebar.header("Pengaturan Sinyal")
 timeframe_input = st.sidebar.selectbox(
     "Timeframe Eksekusi", ["1m", "5m", "15m", "1h"], index=2
@@ -45,14 +46,30 @@ lot_size = st.sidebar.number_input(
     "Ukuran Lot", value=0.01, step=0.01, format="%.2f"
 )
 
-auto_refresh = st.sidebar.checkbox("Aktifkan Auto-Refresh (Setiap 2 Menit)")
+auto_refresh = st.sidebar.checkbox(
+    "Aktifkan Auto-Refresh (Setiap 2 Menit)", value=True
+)
 
-# Jika dicentang, gunakan meta refresh HTML (tidak bikin layar samar/freeze)
 if auto_refresh:
-  st.markdown(
-      '<meta http-equiv="refresh" content="120">', unsafe_allow_html=True
-  )
-  st.sidebar.caption("🔄 Auto-refresh aktif (120 detik).")
+  # Komponen JavaScript untuk Countdown Timer yang berjalan nyata di sidebar
+  countdown_html = """
+    <div style="font-family: sans-serif; font-size: 14px; color: #31333F; background-color: #F0F2F6; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
+        🔄 Refresh otomatis dalam: <span id="timer" style="font-weight: bold; color: #FF4B4B;">120</span> detik
+    </div>
+    <script>
+        var timeLeft = 120;
+        var timerId = setInterval(function() {
+            if(timeLeft <= 0) {
+                clearInterval(timerId);
+                location.reload();
+            } else {
+                document.getElementById('timer').innerHTML = timeLeft;
+                timeLeft -= 1;
+            }
+        }, 1000);
+    </script>
+    """
+  components.html(countdown_html, height=50)
 
 if st.sidebar.button("Perbarui Analisis Pasar Sekarang", type="primary"):
   st.rerun()
