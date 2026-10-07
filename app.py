@@ -74,6 +74,32 @@ if auto_refresh:
 if st.sidebar.button("Perbarui Analisis Pasar Sekarang", type="primary"):
   st.rerun()
 
+# --- TOMBOL TEST TELEGRAM DI SIDEBAR ---
+st.sidebar.divider()
+st.sidebar.subheader("Uji Coba Bot Telegram")
+if st.sidebar.button("Kirim Test Pesan ke Telegram"):
+  # Pastikan variabel token & chat_id sudah terhubung
+  test_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+  test_payload = {
+      "chat_id": TELEGRAM_CHAT_ID,
+      "text": (
+          "🚨 *TEST NOTIFIKASI XAUUSDm*\nSistem pemantau 0.01 lot terhubung dengan"
+          " sukses! Bot siap mengirimkan sinyal."
+      ),
+      "parse_mode": "Markdown",
+  }
+  try:
+    import requests
+
+    response = requests.post(test_url, json=test_payload, timeout=5)
+    if response.status_code == 200:
+      st.sidebar.success("Pesan tes berhasil dikirim ke Telegram!")
+    else:
+      st.sidebar.error(
+          "Gagal mengirim. Periksa kembali Bot Token dan Chat ID kamu."
+      )
+  except Exception as e:
+    st.sidebar.error(f"Error: {e}")
 
 # Fungsi Ambil Data Presisi Tinggi
 @st.cache_data(ttl=30)
