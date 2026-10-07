@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import streamlit as st
 import yfinance as yf
@@ -36,9 +37,30 @@ def send_telegram_alert(message):
       pass
 
 
-# Fungsi Ambil Data via yfinance
-@st.cache_data(ttl=60)
-def fetch_cloud_data(symbol="GC=F", interval="15m", period="5d"):
+# --- SIDEBAR KONTROL & AUTO-REFRESH ---
+st.sidebar.header("Pengaturan Sinyal")
+timeframe_input = st.sidebar.selectbox(
+    "Timeframe Eksekusi", ["1m", "5m", "15m", "1h"], index=2
+)
+lot_size = st.sidebar.number_input(
+    "Ukuran Lot", value=0.01, step=0.01, format="%.2f"
+)
+
+# Fitur Auto-Refresh agar halaman memperbarui data secara berkala
+auto_refresh = st.sidebar.checkbox("Aktifkan Auto-Refresh (Setiap 2 Menit)")
+if auto_refresh:
+  # Menggunakan st.rerun dengan jeda waktu aman
+  time.sleep(120)
+  st.rerun()
+
+if st.sidebar.button("Perbarui Analisis Pasar Sekarang", type="primary"):
+  st.rerun()
+
+
+# Fungsi Ambil Data Presisi Tinggi
+@st.cache_data(ttl=30)
+def fetch_cloud_data(symbol="GC=F", interval="15m", period="2d"):
+  # Menggunakan period '2d' atau '5d' dengan interval terpilih untuk sinkronisasi optimal
   data = yf.download(symbol, period=period, interval=interval, progress=False)
   if data.empty:
     return None
@@ -48,45 +70,28 @@ def fetch_cloud_data(symbol="GC=F", interval="15m", period="5d"):
   return data
 
 
-# --- SIDEBAR KONTROL ---
-st.sidebar.header("Pengaturan Sinyal")
-timeframe_input = st.sidebar.selectbox(
-    "Timeframe Eksekusi", ["5m", "15m", "1h"], index=1
-)
-lot_size = st.sidebar.number_input(
-    "Ukuran Lot", value=0.01, step=0.01, format="%.2f"
-)
-
-if st.sidebar.button("Perbarui Analisis Pasar", type="primary"):
-  st.rerun()
-
-tf_map = {"5m": "5m", "15m": "15m", "1h": "1h"}
-yf_interval = tf_map.get(timeframe_input, "15m")
-
-with st.spinner("Menganalisis pasar emas global..."):
-  df_exec = fetch_cloud_data("GC=F", interval=yf_interval, period="5d")
-  df_macro = fetch_cloud_data("GC=F", interval="1h", period="7d")
+with st.spinner("Menarik data pasar emas global terbaru..."):
+  # Menyesuaikan periode agar data lebih segar dan selaras antara lokal & cloud
+  df_exec = fetch_cloud_data("GC=F", interval=timeframe_input, period="2d")
+  df_macro = fetch_cloud_data("GC=F", interval="1h", period="5d")
 
   if df_exec is not None and df_macro is not None:
-    # Hitung Indikator Manual (Aman dari error pandas-ta)
+    # Perhitungan Indikator Teknikal Manual (Anti-Conflict)
     df_exec["EMA_50"] = df_exec["Close"].ewm(span=50, adjust=False).mean()
     df_exec["EMA_200"] = df_exec["Close"].ewm(span=200, adjust=False).mean()
 
-    # Hitung RSI 14 manual
     delta = df_exec["Close"].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     df_exec["RSI"] = 100 - (100 / (1 + rs))
 
-    # Hitung ATR 14 manual
     high_low = df_exec["High"] - df_exec["Low"]
     high_close = (df_exec["High"] - df_exec["Close"].shift()).abs()
     low_close = (df_exec["Low"] - df_exec["Close"].shift()).abs()
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     df_exec["ATR"] = tr.rolling(window=14).mean()
 
-    # Hitung Tren Makro (1H)
     df_macro["EMA_200"] = df_macro["Close"].ewm(span=200, adjust=False).mean()
 
     df_exec = df_exec.dropna()
